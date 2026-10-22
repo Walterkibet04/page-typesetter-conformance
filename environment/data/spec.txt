@@ -1,0 +1,121 @@
+FOLIO HOUSE STYLE - description of the layout
+
+This document describes what the typesetter does. It is a description, not a full
+specification: the file format, the output format and the page geometry are given
+exactly, but the tuning of the rules (penalties, thresholds, minimum counts, tie
+rules, rounding) is not. For all of that, /app/folio_ref is the authority. It is the
+reference build of the typesetter: "folio_ref file.fol" prints the correct output for
+any valid document (use "-" to read the document from standard input). A program is
+correct when its output for a document is the same as folio_ref's.
+
+Everything below that is marked "(given)" is exact. Where a rule is described without
+numbers, find them by experiment.
+
+1. INPUT (given)
+
+A document is blocks separated by blank lines. A block that starts with "# " is a
+level-1 heading, one that starts with "## " a level-2 heading; the rest of the block
+(trimmed) is the heading text. Any other block is a paragraph: its lines are joined
+with single spaces and its words are separated by white space.
+
+A paragraph that starts with "^" is a drop-cap paragraph: the "^" is removed and the
+first letter of the first word is the drop cap.
+A "~" inside a word is a no-break space (U+00A0) in the output.
+A hyphen inside a word is a hard hyphen, where the word may be broken.
+A footnote is written [[text]] straight after the word it belongs to (no space); the
+word gets a footnote marker and the footnotes are numbered 1, 2, 3, ... through the
+whole document in the order they appear.
+
+An anchor is written {#label} at the very start of a paragraph block (before any "^"),
+label made of lower-case letters and digits. A reference is written {@label} inside a
+word; it is replaced by the page number of the anchor with that label, as a lower-case
+roman numeral, before the word is laid out (so it is part of the word, with its width).
+A reference to an unknown label prints "?".
+
+2. OUTPUT (given)
+
+typeset(text) returns {"pages": [page, ...]}; a page is a list of entries in this
+order: the body entries as they are placed, then (if the page has footnotes) one
+"rule" entry, then the "fn" entries. An entry is a dictionary:
+  heading   {"k": "h1" or "h2", "pg", "y", "x": 0, "t": text}
+  drop cap  {"k": "cap", "pg", "y", "x": 0, "t": the letter, "r": 3}
+  body line {"k": "body", "pg", "y", "x": indent, "t": text, "g": [gap widths]}
+  rule      {"k": "rule", "pg", "y", "x": 0}
+  footnote  {"k": "fn", "pg", "y", "x": 0, "t": text of one footnote line}
+"pg" is the page number from 1, "y" the distance from the top of the page in points.
+The text of a body line is its words joined by single spaces; a word with a footnote
+marker is followed by "^N" (N the footnote number); a line broken inside a word at a
+soft point ends with "-". The drop-cap letter is not part of the text of the lines.
+"g" has one integer for each gap between words of the line: its width in points.
+
+3. GEOMETRY (given)
+
+A page is 36 rows of 12 points. The text measure is 360 points. Widths in points:
+  i l I t f j ! . , ; : ' | ( )   4
+  m w M W                         12
+  - (hyphen)                      5
+  other capital letters           10
+  every other character           8
+  no-break space                  4
+A natural space between words is 4. A hyphen added at a soft break is 5. A footnote
+marker adds 3 to its word. The first line of a paragraph that follows a paragraph is
+indented 24 (not if it is a drop-cap paragraph, and not after a heading). A drop-cap
+paragraph has its first three lines indented 30, and the cap is 3 rows high.
+Headings (rows): h1 has 3 rows before, is 2 tall, 1 after; h2 has 2 before, 1 tall,
+1 after. The space before is dropped at the top of a page.
+Footnotes: the lines of a footnote are set at a little under three-quarters of the normal
+width of its words (the exact scale and rounding are for you to find), with spaces of 3, to at most 360;
+the first line starts with the label "N.". The footnote block of a page is a rule
+plus the footnote lines: its height is 18 points plus 9 per line, rounded up to whole
+rows, and it sits at the foot of the page; the rule entry has the y of the top of the
+block and the footnote lines start 18 points below it, 9 points apart.
+
+4. LINE BREAKING (rules described, constants not given)
+
+Paragraphs are broken into lines by a total-fit method in the manner of TeX's
+(Knuth-Plass): the breaks of the whole paragraph are chosen together to minimise a
+total of demerits, not line by line. Glue (the spaces) can stretch and shrink; a line's
+badness comes from how far its spaces are stretched or shrunk, growing steeply; lines
+fall in fitness classes (tight, normal, loose, very loose) and joining lines whose
+classes are too different costs extra; a break at a hyphen costs a penalty (a break
+at a hard hyphen costs less than one inside a word), two hyphen breaks in a row cost
+extra, and so does a hyphen break on the line before the last line; a last line that is
+only a very short word costs extra too. The search is made with a tolerance for badness;
+if no breaking exists the tolerance is raised, and as a last resort overfull lines are
+accepted. All arithmetic is in integers. When two breakings are equally good the
+reference picks one in a fixed way. The first line of a drop-cap paragraph, and the
+indents above, change the width available to the lines concerned.
+
+Justification: all lines but the last of a paragraph are set to the full measure; the
+spare points are shared among the gaps in a fixed way (see the samples). The last line
+of a paragraph is not stretched: its gaps are at most the natural space.
+
+Hyphenation: a word may be broken at a hard hyphen (but not within its first two
+characters), and plain lower-case words of six letters or more have soft break points
+found by a simple vowel and consonant pattern, with some letter pairs that are never
+split and a few exception words that have their own points. A word that carries a
+footnote marker is not broken at soft points.
+
+5. PAGES (rules described, constants not given)
+
+Lines are placed top to bottom. A page is full when its body rows plus the rows of its
+footnote block would not fit in 36 rows. A paragraph can be split between pages, but:
+short paragraphs are not split, a split leaves a minimum number of lines on each side,
+and a drop-cap paragraph needs its three rows (a drop-cap paragraph of one or two
+lines takes three rows). A page does not end on a line that ends in a soft hyphen. A heading is kept with what follows it: if the beginning of
+the next block (a few lines of a paragraph, counting the footnotes they bring) does not
+fit on the page too, the heading goes to the next page; consecutive headings are kept
+together, and set closer than a heading that follows text. A page that has only just been started never refuses what it is given.
+
+Footnotes: all the footnotes of the lines of a page go on that page. When a line's
+footnotes do not fit but part of one of them would, the footnote may be split between
+pages, with a minimum number of lines on each side; the footnotes after it and the rest
+of it are carried to the top of the footnote block of the next page and take room there
+before the page's own footnotes. If lines are still carried when the document ends,
+they get a page of their own.
+
+References: the page number printed by a reference changes the widths of its line, so
+the document is laid out again, starting from the assumption that every anchor is on
+page 3 and using each time the pages the anchors fell on, until the anchors stop
+moving; the number of layouts is limited (the limit is not given). The page of an anchor is the page where the
+first line of its paragraph is placed.
